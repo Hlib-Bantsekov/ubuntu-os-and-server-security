@@ -1,0 +1,6 @@
+zone "student.co.uk" {
+    type slave;
+    file "/var/cache/bind/db.student.co.uk";
+    masters { 192.168.187.50; };
+    allow-query { localnets; };
+};

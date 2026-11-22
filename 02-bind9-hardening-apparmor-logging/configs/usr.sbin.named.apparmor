@@ -1,0 +1,2 @@
+# Added inside /usr/sbin/named flags=(attach_disconnected) { ... } in /etc/apparmor.d/usr.sbin.named
+/var/log/named/** rw,

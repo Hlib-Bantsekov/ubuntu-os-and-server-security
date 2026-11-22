@@ -1,0 +1,25 @@
+$TTL 1209600
+$ORIGIN student.co.uk.
+@   IN  SOA ns.student.co.uk. admin.student.co.uk. (
+            2026103103
+            3h
+            15m
+            3w
+            2h )
+
+@       IN  NS      ns1.student.co.uk.
+@       IN  NS      ns2.student.co.uk.
+@       IN  MX  10  mail.student.co.uk.
+
+ns1     IN  A       192.168.187.51
+ns2     IN  A       192.168.187.52
+
+www2    IN  A       192.168.187.2
+www     IN  CNAME   www2
+
+mail    5184000 IN  A   192.168.187.2
+me      0   IN  A       192.168.187.128
+
+server  IN  A       192.168.187.23
+gateway IN  A       192.168.187.254
+test    IN  A       192.168.187.9
