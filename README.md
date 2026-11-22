@@ -8,12 +8,41 @@ A collection of hands-on Linux system administration and server hardening labs b
 
 > **Work in Progress:** This repository is maintained alongside ongoing coursework. Additional completed labs covering subsequent Linux administration and server security topics are being documented and uploaded incrementally as time permits.
 
+## Lab Topology
+
+```text
++-------------------------------------------------------------------+
+|                   Internal Lab Subnet: 192.168.187.0/24           |
+|                                                                   |
+|  +------------------------+                                       |
+|  |  Ubuntu Desktop Client |                                       |
+|  |   (nslookup/Wireshark) |                                       |
+|  +-----------+------------+                                       |
+|              | DNS Queries (UDP/53)                               |
+|              v                                                    |
+|  +------------------------+      +------------------------+       |
+|  |   Secondary DNS (ns1)  |      |   Secondary DNS (ns2)  |       |
+|  |     192.168.187.51     |      |     192.168.187.52     |       |
+|  +-----------+------------+      +-----------+------------+       |
+|              ^                               ^                    |
+|              |   Zone Transfer (rndc / AXFR) |                    |
+|              +---------------+---------------+                    |
+|                              |                                    |
+|                 +------------+------------+                       |
+|                 |  Hidden Primary DNS     |                       |
+|                 |  192.168.187.50         |                       |
+|                 |  (AppArmor + Query Log) |                       |
+|                 +-------------------------+                       |
++-------------------------------------------------------------------+
+```
+
 ## Lab Modules
 
 | # | Module | Configured Features & Services |
 | :--- | :--- | :--- |
 | 01 | [BIND9 Primary & Secondary DNS](./01-bind9-primary-secondary-dns) | BIND9 (`named`), Primary/Slave Zone Replication, `dnssec-validation no`, `rndc retransfer`, `named-checkconf` |
 | 02 | [DNS Hardening, AppArmor & Query Logging](./02-bind9-hardening-apparmor-logging) | Hidden Primary Architecture, `NS`/`A` Zone Records, `chown` Directory Permissions, AppArmor (`usr.sbin.named`), BIND9 Query Logging |
+| 03 | [Wireshark DNS Traffic Analysis](./03-wireshark-dns-traffic-analysis) | Wireshark Packet Capture (`.pcapng`), `dns` Display Filter, UDP Port 53 Dissection, Plaintext Stream Auditing |
 
 ## Repository Layout
 
@@ -24,6 +53,10 @@ Every lab directory follows a uniform structure for quick review:
 |   |-- configs/        # BIND9 configuration files, zone records, and AppArmor profile rules
 |   |-- screenshots/    # Terminal verification outputs and syntax debugging captures
 |   \-- README.md       # Lab objectives, configuration breakdown, and test results
+|-- 03-wireshark-dns-traffic-analysis/
+|   |-- captures/       # Wireshark packet captures (.pcapng)
+|   |-- screenshots/    # Wireshark DNS dissection and UDP stream screenshots
+|   \-- README.md       # Lab objectives, packet analysis, and verification results
 ```
 
 ## Verification & Troubleshooting Approach
@@ -34,6 +67,7 @@ All server configurations were validated end-to-end using native Linux diagnosti
 * **Daemon & Mandatory Access Control Status:** `sudo systemctl status bind9` and `sudo systemctl status apparmor`
 * **Zone Synchronization & Client Resolution:** `sudo rndc retransfer student.co.uk` (manual slave zone pull when `notify no;` is configured on Primary) and `nslookup -type=ns` / `nslookup -type=A` queries from an Ubuntu Desktop client
 * **Ownership & Audit Log Verification:** `sudo chown bind:bind /var/log/named` and `sudo cat /var/log/named/query.log` to confirm real-time query capture
+* **Wireshark Packet Capture:** Applied the `dns` display filter to inspect DNS queries and responses, dissect UDP port 53 traffic, and audit plaintext DNS payloads
 
 ## How to Reproduce
 
