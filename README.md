@@ -4,37 +4,20 @@
 ![Service](https://img.shields.io/badge/Service-BIND9%20DNS-2C3E50?style=flat-square)
 ![Focus](https://img.shields.io/badge/Focus-Linux%20Server%20Security-27AE60?style=flat-square)
 
-A collection of hands-on Linux system administration and server hardening labs built and verified in **Ubuntu Server** virtual environments. Each lab focuses on practical network service deployment, access control enforcement, log auditing, and CLI-based troubleshooting. This repository is organized by progressively more advanced topics, covering everything from replicated DNS infrastructure to hidden-primary hardening and AppArmor confinement.
+A collection of hands-on Linux system administration and server hardening labs built and verified in **Ubuntu Server** virtual environments. Each lab focuses on practical network service deployment, access control enforcement, log auditing, and packet-level troubleshooting. This repository is organized by progressively more advanced topics, covering replicated DNS infrastructure, hidden-primary hardening with AppArmor, and Wireshark traffic inspection.
 
 > **Work in Progress:** This repository is maintained alongside ongoing coursework. Additional completed labs covering subsequent Linux administration and server security topics are being documented and uploaded incrementally as time permits.
 
-## Lab Topology
+## Lab Environment & Topology
 
-```text
-+-------------------------------------------------------------------+
-|                   Internal Lab Subnet: 192.168.187.0/24           |
-|                                                                   |
-|  +------------------------+                                       |
-|  |  Ubuntu Desktop Client |                                       |
-|  |   (nslookup/Wireshark) |                                       |
-|  +-----------+------------+                                       |
-|              | DNS Queries (UDP/53)                               |
-|              v                                                    |
-|  +------------------------+      +------------------------+       |
-|  |   Secondary DNS (ns1)  |      |   Secondary DNS (ns2)  |       |
-|  |     192.168.187.51     |      |     192.168.187.52     |       |
-|  +-----------+------------+      +-----------+------------+       |
-|              ^                               ^                    |
-|              |   Zone Transfer (rndc / AXFR) |                    |
-|              +---------------+---------------+                    |
-|                              |                                    |
-|                 +------------+------------+                       |
-|                 |  Hidden Primary DNS     |                       |
-|                 |  192.168.187.50         |                       |
-|                 |  (AppArmor + Query Log) |                       |
-|                 +-------------------------+                       |
-+-------------------------------------------------------------------+
-```
+All lab nodes operate inside an isolated internal virtual network (`192.168.187.0/24`):
+
+| Node Role | Operating System | Static IP | Function & Traffic Flow |
+| :--- | :--- | :--- | :--- |
+| **Hidden Primary DNS** | Ubuntu Server | `192.168.187.50` | Authoritative master for `student.co.uk`; excluded from public `NS` records, confined by AppArmor, and logging queries to `/var/log/named/query.log`. |
+| **Secondary DNS (`ns1`)** | Ubuntu Server | `192.168.187.51` | Client-facing slave server pulling zone data from `.50` via `rndc retransfer` / AXFR. |
+| **Secondary DNS (`ns2`)** | Ubuntu Server | `192.168.187.52` | Redundant client-facing slave server pulling zone data from `.50` via `rndc retransfer` / AXFR. |
+| **Admin / Test Client** | Ubuntu Desktop | `192.168.187.128` | Queries `ns1` and `ns2` over `UDP/53` using `nslookup` and captures DNS traffic in Wireshark. |
 
 ## Lab Modules
 
@@ -50,27 +33,25 @@ Every lab directory follows a uniform structure for quick review:
 
 ```text
 |-- 0X-lab-name/
-|   |-- configs/        # BIND9 configuration files, zone records, and AppArmor profile rules
-|   |-- screenshots/    # Terminal verification outputs and syntax debugging captures
-|   \-- README.md       # Lab objectives, configuration breakdown, and test results
-|-- 03-wireshark-dns-traffic-analysis/
-|   |-- captures/       # Wireshark packet captures (.pcapng)
-|   |-- screenshots/    # Wireshark DNS dissection and UDP stream screenshots
-|   \-- README.md       # Lab objectives, packet analysis, and verification results
+|   |-- configs/        # BIND9 configuration files, zone records, and AppArmor rules (Modules 01–02)
+|   |-- captures/       # Wireshark packet capture files in .pcapng format (Module 03)
+|   |-- screenshots/    # Terminal verification outputs, syntax checks, and Wireshark captures
+|   \-- README.md       # Lab objectives, configuration breakdown, and verification results
 ```
 
 ## Verification & Troubleshooting Approach
 
-All server configurations were validated end-to-end using native Linux diagnostic utilities rather than relying solely on daemon restarts:
+Every configuration change and network flow was validated end-to-end using native Linux diagnostic utilities and packet inspection:
 
-* **Configuration Syntax Validation:** `sudo named-checkconf` (catching missing braces, semicolons, and uncommented `forwarders` directives prior to reloading `bind9`)
-* **Daemon & Mandatory Access Control Status:** `sudo systemctl status bind9` and `sudo systemctl status apparmor`
-* **Zone Synchronization & Client Resolution:** `sudo rndc retransfer student.co.uk` (manual slave zone pull when `notify no;` is configured on Primary) and `nslookup -type=ns` / `nslookup -type=A` queries from an Ubuntu Desktop client
-* **Ownership & Audit Log Verification:** `sudo chown bind:bind /var/log/named` and `sudo cat /var/log/named/query.log` to confirm real-time query capture
-* **Wireshark Packet Capture:** Applied the `dns` display filter to inspect DNS queries and responses, dissect UDP port 53 traffic, and audit plaintext DNS payloads
+* **Configuration Syntax Validation:** `sudo named-checkconf` to catch missing braces, semicolons, or improperly commented `forwarders` directives before reloading `bind9`.
+* **Daemon & AppArmor Policy Status:** `sudo systemctl status bind9` and `sudo systemctl status apparmor` to verify active service states and mandatory access control profile reloads.
+* **Zone Synchronization & Client Resolution:** `sudo rndc retransfer student.co.uk` to force manual slave zone transfers (when `notify no;` is configured on the primary node), followed by `nslookup -type=ns` and `nslookup -type=A` queries from Ubuntu Desktop.
+* **Directory Permissions & Audit Logs:** `sudo chown bind:bind /var/log/named` to enforce least-privilege ownership and `sudo tail -n 15 /var/log/named/query.log` to confirm real-time DNS query recording.
+* **Packet-Level Traffic Auditing:** Wireshark with the `dns` display filter on `UDP/53` to dissect `A`, `CNAME`, and `NS` responses and inspect unencrypted DNS payloads via `Follow -> UDP Stream`.
 
 ## How to Reproduce
 
-1. Deploy three **Ubuntu Server** virtual machines on an internal subnet (`192.168.187.50` as Primary DNS; `192.168.187.51` and `192.168.187.52` as Secondary DNS servers) alongside an **Ubuntu Desktop** client VM.
-2. Install BIND9 (`sudo apt update && sudo apt install bind9 bind9utils -y`) and copy the files from each module's `configs/` directory into `/etc/bind/` (and `/etc/apparmor.d/usr.sbin.named` for Module 02).
-3. Validate syntax with `sudo named-checkconf` and reload `apparmor` and `bind9` via `systemctl`.
+1. **Provision Virtual Machines:** Deploy three **Ubuntu Server** VMs on a shared internal subnet (`192.168.187.50` as Hidden Primary DNS; `192.168.187.51` and `192.168.187.52` as Secondary DNS nodes) alongside an **Ubuntu Desktop** client VM.
+2. **Deploy BIND9 & Hardening Rules:** Install BIND9 (`sudo apt update && sudo apt install bind9 bind9utils -y`), copy the configuration files from `01-.../configs/` and `02-.../configs/` into `/etc/bind/` and `/etc/apparmor.d/usr.sbin.named`, and create `/var/log/named` owned by `bind:bind`.
+3. **Validate & Synchronize Zones:** Verify syntax with `sudo named-checkconf`, reload `apparmor` and `bind9` via `systemctl`, and pull the zone onto the secondary servers using `sudo rndc retransfer student.co.uk`.
+4. **Test Resolution & Capture Packets:** Run `nslookup` queries from Ubuntu Desktop, verify logged entries in `/var/log/named/query.log`, and capture live `UDP/53` traffic in Wireshark (`sudo wireshark`) using the `dns` display filter.
